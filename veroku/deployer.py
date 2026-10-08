@@ -167,25 +167,41 @@ def _websockify(wsport: int, rfbport: int, web_root: str | None) -> subprocess.P
 
 
 def _tunnel(cloudflared: str, port: int) -> tuple[subprocess.Popen, str]:
+    import selectors
+
     proc = subprocess.Popen(
-        [cloudflared, "tunnel", "--url", f"http://localhost:{port}"],
+        [cloudflared, "tunnel", "--url", f"http://localhost:{port}",
+         "--no-autoupdate"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
     )
     url = None
     deadline = time.time() + 60
+    sel = selectors.DefaultSelector()
+    out = proc.stdout
+    assert out is not None
+    sel.register(out, selectors.EVENT_READ)
     while time.time() < deadline:
-        line = proc.stdout.readline() if proc.stdout else ""
-        if "trycloudflare.com" in line:
-            url = line.strip().split()[-1]
-            if url.startswith("https://"):
-                break
-            url = None
+        events = sel.select(timeout=1.0)
+        for key, _ in events:
+            line = out.readline()
+            if not line:
+                continue
+            if "trycloudflare.com" in line:
+                for token in line.split():
+                    if token.startswith("https://"):
+                        url = token
+                        break
+                if url:
+                    break
+        if url:
+            break
         if proc.poll() is not None:
             raise RuntimeError("cloudflared exited early")
-        time.sleep(0.2)
+    sel.close()
     if not url:
+        proc.terminate()
         raise RuntimeError("tunnel url not found")
     return proc, url
 
