@@ -1,4 +1,15 @@
-"""Veroku one-shot deployer: VNC login + dash tunnel, used only when auth is needed."""
+"""Veroku one-shot deployer: VNC login + station dash tunnel, used only when auth is needed.
+
+Patched for COSMETIC STATION terminal:
+  * the station dashboard runs for the WHOLE VNC login session (not a 5s flash);
+  * the live noVNC feed is embedded into the dashboard (VNC STREAM panel);
+  * after the web token appears the dash shows "TOKEN ACQUIRED" and shuts down.
+
+Changes vs the original file:
+  * _dash_ephemeral -> _dash_session + _dash_shutdown
+  * deploy_login wires vnc_url/vnc_password into make_handler(...)
+Everything else is untouched.
+"""
 
 import contextlib
 import json
@@ -14,36 +25,43 @@ DEFAULT_DEPLOY_DIR = os.path.expanduser("~/.veroku_deployer")
 DASH_PORT = 18900
 
 
-def _dash_ephemeral(cloudflared: str) -> None:
-    """One-shot dashboard tunnel right after login: print URL, then kill."""
-    import http.server
+def _dash_session(cloudflared: str, vnc_url: str = "", vnc_password: str = ""):
+    """Start the station dashboard (VNC stream embedded) + one-shot tunnel."""
     import socketserver
     import threading
 
-    from .dash_page import DASH_PAGE, make_handler
+    from .dash_page import make_handler
 
-    socketserver.ThreadingTCPServer.allow_reuse_address = True
-    server = socketserver.ThreadingTCPServer(
-        ("127.0.0.1", DASH_PORT), make_handler()
-    )
-    server.daemon_threads = True
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-
-    tun = None
     try:
+        socketserver.ThreadingTCPServer.allow_reuse_address = True
+        handler_cls = make_handler(vnc_url=vnc_url, vnc_password=vnc_password)
+        server = socketserver.ThreadingTCPServer(("127.0.0.1", DASH_PORT), handler_cls)
+        server.daemon_threads = True
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+
         tun, url = _tunnel(cloudflared, DASH_PORT)
-        _log("DASH URL: " + url)
-        _log("Dashboard will shut down in 5 seconds; it reappears only")
-        _log("on the next fresh login (dead session).")
-        time.sleep(5)
+        _log("STATION DASH URL: " + url)
+        _log("Open it — the VNC stream is embedded in the UPLINK panel.")
+        _log("The station shuts down automatically when login completes.")
+        return {"server": server, "tun": tun, "url": url, "handler": handler_cls}
+    except Exception:
+        _log("station dash failed to start (login flow continues)")
+        return None
+
+
+def _dash_shutdown(sess, hold: float = 8.0) -> None:
+    """Give the operator a moment, then tear the dash tunnel + server down."""
+    if not sess:
+        return
+    try:
+        if hold > 0:
+            time.sleep(hold)
+        sess["tun"].terminate()
+        with contextlib.suppress(Exception):
+            sess["tun"].wait(timeout=5)
+        threading.Thread(target=sess["server"].shutdown, daemon=True).start()
     except Exception:
         pass
-    finally:
-        if tun:
-            tun.terminate()
-            with contextlib.suppress(Exception):
-                tun.wait(timeout=5)
-        threading.Thread(target=server.shutdown, daemon=True).start()
 
 
 def _find_free_port(start: int) -> int:
@@ -236,7 +254,7 @@ def deploy_login(
     token_file: str,
     deploy_dir: str = DEFAULT_DEPLOY_DIR,
 ) -> dict:
-    """Spin up Xvfb+VNC+noVNC+cloudflared; user logs in; write token; tear down."""
+    """Spin up Xvfb+VNC+noVNC+station dash; user logs in; write token; tear down."""
     display = 95
     rfbport = 5995
     wsport = 5996
@@ -260,19 +278,28 @@ def deploy_login(
         _log("starting tunnel")
         tun, url = _tunnel(cloudflared, wsport)
 
-        login_url = f"{url}/vnc.html?autoconnect=1&resize=scale" if web_root else url
-        _log("LOGIN URL: " + login_url)
+        vnc_target = (
+            f"{url}/vnc.html?autoconnect=1&resize=scale&password={vnc_password}"
+            if web_root
+            else url
+        )
+        login_url = vnc_target
+        _log("RAW VNC URL: " + login_url)
         _log("VNC PASSWORD: " + vnc_password)
-        _log("Open the URL on your phone, enter the password, log in to VK.")
-        _log("This window will close automatically when login completes.")
+
+        # station dashboard with the VNC stream embedded — lives for the login session
+        dash = _dash_session(cloudflared, vnc_url=vnc_target, vnc_password=vnc_password)
 
         browser = _run_login_browser(display, profile_dir)
 
         _log("waiting for web token (up to 10 min)...")
         try:
             token_data = _wait_token(profile_dir, timeout=600)
+            if dash:
+                with contextlib.suppress(Exception):
+                    dash["handler"].emit("TOKEN ACQUIRED")
         finally:
-            _dash_ephemeral(cloudflared)
+            _dash_shutdown(dash, hold=8)
             _log("shutting down")
             for p in (browser, tun, ws, vnc, xvfb):
                 try:
