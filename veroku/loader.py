@@ -185,6 +185,17 @@ class Modules:
 
     def add_aliases(self, aliases: dict) -> None:
         self.aliases.update(aliases)
+        for alias, cmd in aliases.items():
+            self.add_alias(alias, *cmd.split(maxsplit=1))
+
+    def add_alias(self, alias: str, cmd: str, args: str | None = None) -> bool:
+        if cmd.split()[0].lower() not in self.commands:
+            return False
+        self.aliases[alias.lower().strip()] = f"{cmd} {args}" if args else cmd
+        return True
+
+    def remove_alias(self, alias: str) -> bool:
+        return bool(self.aliases.pop(alias.lower().strip(), None))
 
     async def unload_module(self, classname: str) -> Module:
         module = self.lookup(classname)
@@ -202,33 +213,88 @@ class Modules:
         ]
         return module
 
-    def lookup(self, name: str) -> Module:
-        for module in self.modules:
-            if name in (module.name, module.__class__.__name__):
-                return module
-        raise KeyError(f"module {name} not found")
+    def lookup(self, name: str):
+        return next(
+            (
+                module
+                for module in self.modules
+                if module.__class__.__name__.lower() == name.lower()
+                or getattr(module, "name", "").lower() == name.lower()
+            ),
+            False,
+        )
 
     def get_module_commands(self, module: Module) -> dict:
         return get_commands(module)
 
-    def get_prefix(self) -> str:
-        prefixes = self.get_prefixes()
-        return prefixes[0] if prefixes else "."
+    def get_prefix(self, ent_id: int = None) -> str:
+        main_prefix = self.db.get("veroku", "command_prefix", ".")
+        if ent_id:
+            prefixes = self.db.get("veroku", "command_prefixes", {})
+            return prefixes.get(str(ent_id), main_prefix)
+        return main_prefix
 
     def get_prefixes(self) -> list[str]:
-        pref = self.db.get("veroku", "command_prefix", ".")
-        return list(pref) if isinstance(pref, str) else pref or ["."]
+        prefixes = {
+            value
+            for value in self.db.get("veroku", "command_prefixes", {}).values()
+        }
+        prefixes.add(self.get_prefix())
+        return list(prefixes)
+
+    def find_alias(self, alias: str):
+        if not alias:
+            return None
+        for command_name, _command in self.commands.items():
+            aliases = []
+            if getattr(_command, "alias", None) and not (
+                aliases := getattr(_command, "aliases", None)
+            ):
+                aliases = [_command.alias]
+            if not aliases:
+                continue
+            if any(
+                alias.lower() == _alias.lower()
+                and alias.lower() not in self._core_commands
+                for _alias in aliases
+            ):
+                return command_name
+        return None
 
     def dispatch(self, command: str):
-        """Resolve command name (with alias) to (cmd, func)."""
-        cmd = command.split()[0].lower() if command else ""
-        if cmd in self.commands:
-            return (cmd, self.commands[cmd])
+        """Resolve command/alias to (cmd, func) with disabled check."""
+        resolved = next(
+            (
+                (cmd, self.commands[cmd.split()[0].lower()])
+                for cmd in (
+                    command,
+                    self.aliases.get(command.lower()),
+                    self.find_alias(command),
+                )
+                if cmd and cmd.split()[0].lower() in self.commands
+            ),
+            (command, None),
+        )
 
-        alias = self.aliases.get(cmd)
-        if alias:
-            target = alias.split(maxsplit=1)[0].lower()
-            if target in self.commands:
-                return (target, self.commands[target])
+        cmd, func = resolved
+        if not func:
+            return resolved
 
-        return (command, None)
+        disabled_modules = self.db.get("veroku", "disabled_modules", [])
+        disabled_commands = self.db.get("veroku", "disabled_commands", {})
+
+        module_name = getattr(
+            getattr(func, "__self__", None), "__class__", type("", (), {})
+        ).__name__
+
+        if module_name in disabled_modules:
+            return (command, None)
+
+        if module_name in disabled_commands:
+            disabled_for_mod = [
+                x.lower() for x in disabled_commands.get(module_name, [])
+            ]
+            if cmd.split()[0].lower() in disabled_for_mod:
+                return (command, None)
+
+        return (cmd, func)

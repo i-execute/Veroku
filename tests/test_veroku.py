@@ -11,7 +11,7 @@ from veroku.loader import Modules
 from veroku.database import Database
 from veroku.dispatcher import CommandDispatcher
 from veroku.client import CustomVKClient, VerokuMessage
-from veroku.security import SecurityManager
+from veroku.security import SecurityManager, OWNER, SUDO, EVERYONE
 
 
 class FakeVK:
@@ -144,12 +144,14 @@ def test_prefix_from_db(modules, db):
 def test_security_owner(db):
     sec = SecurityManager(db)
     sec.set_owner(42)
-    assert sec.check(42)
-    assert not sec.check(43)
+    assert sec.check(42, OWNER)
+    assert not sec.check(43, OWNER)
     sec.add_sudo(43)
-    assert sec.check(43)
+    assert sec.check(43, SUDO)
+    assert sec.check(43, EVERYONE)
     sec.remove_sudo(43)
-    assert not sec.check(43)
+    assert not sec.check(43, SUDO)
+    assert sec.check(43, EVERYONE)
 
 
 def test_database_roundtrip(db):

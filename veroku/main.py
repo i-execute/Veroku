@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import json
+import logging
 import os
 import sys
 
@@ -10,6 +11,8 @@ import vkover
 
 from .client import CustomVKClient
 from .database import Database
+
+logger = logging.getLogger(__name__)
 from .deployer import deploy_login, DEFAULT_DEPLOY_DIR
 from .dispatcher import CommandDispatcher
 from .loader import Modules
@@ -60,14 +63,19 @@ class Veroku:
                     if ev.code == NEW_MESSAGE:
                         from .client import VerokuMessage
 
+                        m = ev.message
+                        if not m.text:
+                            continue
+                        logger.debug("incoming: peer=%s from=%s text=%r", m.peer_id, m.from_id, m.text[:60])
+
                         msg = VerokuMessage(
-                            self.client, ev.peer_id, ev.message_id, ev.text,
-                            out=ev.out, from_id=self.client.vk_id,
-                            date=ev.timestamp,
+                            self.client, m.peer_id, m.id, m.text,
+                            out=m.out, from_id=m.from_id,
+                            date=m.date,
                         )
                         loop.call_soon_threadsafe(
-                            lambda m=msg: loop.create_task(
-                                self.dispatcher.handle_message(m)
+                            lambda mm=msg: loop.create_task(
+                                self.dispatcher.handle_message(mm)
                             ),
                         )
             except Exception:

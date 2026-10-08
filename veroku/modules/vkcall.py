@@ -40,7 +40,7 @@ class VKCalls(Module):
     async def vkcall(self, message, args: str):
         """VK calls manager: create/list/kill"""
         if not args:
-            await message.reply(self.strings["usage"])
+            await _a(message, self.strings["usage"])
             return
 
         sub, rest = (args.split(maxsplit=1) + [""])[:2]
@@ -53,7 +53,7 @@ class VKCalls(Module):
         elif sub == "kill":
             await self._kill(message, rest.strip())
         else:
-            await message.reply(self.strings["usage"])
+            await _a(message, self.strings["usage"])
 
     async def _create(self, message, group_arg: str):
         group_id = int(group_arg) if group_arg.strip().isdigit() else None
@@ -61,11 +61,11 @@ class VKCalls(Module):
             resp = self._client.vk.create_web_call_request(group_id)
             entry = self._cache.add(resp)
         except Exception as e:
-            await message.reply(self.strings["failed"].format(error=str(e)[:200]))
+            await _a(message, self.strings["failed"].format(error=str(e)[:200]))
             return
 
         sc = entry["short_credentials"]
-        await message.reply(self.strings["created"].format(
+        await _a(message, self.strings["created"].format(
             call_id=entry["call_id"],
             join_link=entry["join_link"] or "?",
             short_id=sc.get("id", "N/A"),
@@ -76,7 +76,7 @@ class VKCalls(Module):
     async def _list(self, message):
         calls = self._cache.all()
         if not calls:
-            await message.reply(self.strings["no_active"])
+            await _a(message, self.strings["no_active"])
             return
         lines = [
             f"{c['call_id']} — {c['short_credentials'].get('id', c['call_id'][:8])}"
@@ -84,18 +84,18 @@ class VKCalls(Module):
         ]
         for chunk in chunks(self.strings["active"].format(
                 count=len(calls), list="\n".join(lines))):
-            await message.reply(chunk)
+            await _a(message, chunk)
 
     async def _kill(self, message, call_id: str):
         if not call_id:
-            await message.reply(self.strings["no_args"])
+            await _a(message, self.strings["no_args"])
             return
         if self._cache.get(call_id) is None:
-            await message.reply(self.strings["unknown"].format(call_id=call_id))
+            await _a(message, self.strings["unknown"].format(call_id=call_id))
             return
         try:
             self._cache.finish(call_id)
         except Exception as e:
-            await message.reply("failed: " + str(e)[:200])
+            await _a(message, "failed: " + str(e)[:200])
             return
-        await message.reply(self.strings["finished"].format(call_id=call_id))
+        await _a(message, self.strings["finished"].format(call_id=call_id))

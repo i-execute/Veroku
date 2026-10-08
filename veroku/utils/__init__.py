@@ -5,6 +5,7 @@ from importlib import import_module
 _MODULES = (
     "args",
     "git",
+    "messages",
     "other",
     "veroku",
     "placeholders",

@@ -54,7 +54,6 @@ class CustomVKClient:
     def __init__(self, vk: vkover.VKover):
         self.vk = vk
         self.vk_id: int = 0
-        self.loop = asyncio.get_event_loop()
 
     async def authorize(self) -> dict:
         me = self.vk.me
@@ -62,7 +61,8 @@ class CustomVKClient:
         return me
 
     async def send_message(self, peer_id: int, text: str, **kw) -> VerokuMessage:
-        r = await self.loop.run_in_executor(
+        loop = asyncio.get_running_loop()
+        r = await loop.run_in_executor(
             None,
             lambda: self.vk.send_message_request(peer_id, text, **kw),
         )
@@ -72,24 +72,28 @@ class CustomVKClient:
 
     async def edit_message(self, peer_id: int, message_id: int, text: str,
                            **kw) -> bool:
-        return await self.loop.run_in_executor(
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
             None,
             lambda: self.vk.edit_message_request(peer_id, message_id, text, **kw),
         )
 
     async def delete_message(self, peer_id: int, message_id: int) -> bool:
-        return await self.loop.run_in_executor(
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
             None,
             lambda: self.vk.delete_message_request([message_id]),
         )
 
     async def set_typing(self, peer_id: int, typing_type: str = "text") -> None:
-        await self.loop.run_in_executor(
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
             None,
             lambda: self.vk.set_typing_request(peer_id, typing_type),
         )
 
     async def run(self):
         await self.authorize()
-        await self.loop.run_in_executor(None, self.vk.run)
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self.vk.run)
 

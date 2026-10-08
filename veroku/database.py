@@ -82,6 +82,9 @@ class Database:
             self._db[owner][key] = value
             self._save()
 
+    def pointer(self, owner: str, key: str, default: JSONSerializable = None):
+        return self.get(owner, key, default)
+
     def _get_raw(self, owner: str, key: str, default: typing.Any = None) -> typing.Any:
         return self._db.get(owner, {}).get(key, default)
 

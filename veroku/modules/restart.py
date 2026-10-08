@@ -1,21 +1,25 @@
-"""Veroku core module: .rst restart."""
+"""Veroku core module: restart."""
 
-from .._internal import restart
+import os
+import sys
+
+from ..utils.messages import answer as _a
 from ..types import Module, command
 
 
 class Restart(Module):
-    """Restart userbot."""
+    """Restart the userbot."""
 
     strings = {
-        "name": "rst",
-        "_cls_doc": "Restart Veroku",
-        "_cmd_doc_rst": " - Restart Veroku",
-        "restarting": "Restarting Veroku...",
+        "name": "restart",
+        "restarting": "<i>Reiniciando…</i>",
+        "restarted": "<b>Successfully restarted!</b>\n<b>Uptime:</b> <code>{uptime}</code>",
+        "_cmd_doc_restart": "Restart the userbot",
+        "_cls_doc": "Restart the userbot",
     }
 
     @command
-    async def rst(self, message, args: str):
+    async def restart(self, message, args: str):
         """Restart the userbot."""
-        await message.reply(self.strings["restarting"])
-        restart()
+        await _a(message, self.strings["restarting"])
+        os.execv(sys.executable, [sys.executable] + sys.argv)

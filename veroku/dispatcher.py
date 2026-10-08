@@ -81,6 +81,9 @@ class CommandDispatcher:
             return
         command = resolved
 
+        if not self.security.check_command(message.from_id, func):
+            return
+
         if self._ratelimit_exceeded(message):
             return
 

@@ -95,6 +95,19 @@ class Module:
         self.vk_id: int = self._client.vk_id
         self._vk_id: int = self._client.vk_id
 
+    def get(self, key: str, default: typing.Any = None) -> typing.Any:
+        return self._db.get(
+            self.__class__.__name__.lower(), key, default
+        )
+
+    def set(self, key: str, value: typing.Any) -> None:
+        self._db.set(self.__class__.__name__.lower(), key, value)
+
+    def pointer(self, key: str, default: typing.Any = None):
+        return self._db.pointer(
+            self.__class__.__name__.lower(), key, default
+        )
+
     async def on_unload(self):
         pass
 
@@ -177,6 +190,27 @@ def watcher(*args, **kwargs):
 
 def ratelimit(func: Command) -> Command:
     func.ratelimit = True
+    return func
+
+
+def _security(level: int):
+    def decorator(func: Command) -> Command:
+        func.security = level
+        return func
+    return decorator
+
+
+def owner(func: Command) -> Command:
+    """Owner-only command (Feroku loader.owner)."""
+    from .security import OWNER
+    func.security = OWNER
+    return func
+
+
+def sudo(func: Command) -> Command:
+    """Sudo+-level command (Feroku loader.sudo)."""
+    from .security import SUDO
+    func.security = SUDO
     return func
 
 def tag(*tags, **kwarg_tags):

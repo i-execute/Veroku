@@ -51,13 +51,13 @@ class Logs(Module):
     async def logsto(self, message, args: str):
         """Bind logs to the current chat"""
         self.db.set("veroku.logs", "peer", message.peer_id)
-        await message.reply(self.strings["enabled"])
+        await _a(message, self.strings["enabled"])
 
     @command
     async def logsoff(self, message, args: str):
         """Disable log forwarding"""
         self.db.set("veroku.logs", "peer", None)
-        await message.reply(self.strings["disabled"])
+        await _a(message, self.strings["disabled"])
 
     @command
     async def logsc(self, message, args: str):
@@ -67,7 +67,7 @@ class Logs(Module):
         chat_id = r if isinstance(r, int) else r.get("chat_id", r)
         peer = 2000000000 + int(chat_id)
         self.db.set("veroku.logs", "peer", peer)
-        await message.reply(self.strings["created"].format(peer=peer))
+        await _a(message, self.strings["created"].format(peer=peer))
 
     async def client_ready(self):
         if self._handler is None:
