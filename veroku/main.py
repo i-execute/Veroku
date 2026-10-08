@@ -85,6 +85,16 @@ def main() -> None:
                     help="state directory")
     args = ap.parse_args()
 
+    config_path = os.path.join(args.root, "config.json")
+    if not os.path.isfile(config_path):
+        from .configurator import wizard_config
+
+        os.makedirs(args.root, exist_ok=True)
+        cfg = wizard_config(args.root)
+        db = Database(os.path.join(args.root, "veroku.db"))
+        db.set("veroku", "owner", cfg["owner"])
+        db.set("veroku", "command_prefix", cfg["prefix"])
+
     bot = Veroku(args.root)
     asyncio.run(bot.run())
 

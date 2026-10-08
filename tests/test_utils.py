@@ -1,63 +1,87 @@
+import pytest
+
 from veroku.utils import (
-    get_args_raw, get_args, chunks, mention, peer_from_chat,
-    chat_from_peer, is_user_peer, fmt_time, rand_id, sanitize_html,
+    get_args,
+    get_args_raw,
+    get_args_split,
+    rand,
+    get_platform,
+    get_uptime_string,
+    array_sum,
+    chunks,
+    get_version_raw,
+)
+from veroku.utils.placeholders import (
+    custom_placeholders,
+    register_placeholder,
+    unregister_placeholders,
+    config_placeholders,
 )
 
 
 class FakeMsg:
-    text = ".vkcall kill abc123"
-    def __init__(self, text=None):
-        if text is not None:
-            self.text = text
+    def __init__(self, text):
+        self.text = text
 
 
 def test_get_args_raw():
-    assert get_args_raw(FakeMsg()) == "kill abc123"
-    assert get_args_raw(FakeMsg(".cmd")) == ""
-    assert get_args_raw(FakeMsg(".cmd a b c")) == "a b c"
+    assert get_args_raw(FakeMsg(".help")) == ""
+    assert get_args_raw(FakeMsg(".help me")) == "me"
+    assert get_args_raw(FakeMsg("")) == ""
 
 
 def test_get_args():
-    assert get_args(FakeMsg()) == ["kill", "abc123"]
-    assert get_args(FakeMsg(".cmd")) == []
+    assert get_args(FakeMsg('.ping a "b c"')) == ["a", "b c"]
+    assert get_args(FakeMsg(".ping")) == []
+    assert get_args(FakeMsg(".ping 'unbalanced")) == ["'unbalanced"]
+
+
+def test_get_args_split():
+    assert get_args_split(FakeMsg(".a b c")) == ["b", "c"]
+    assert get_args_split(FakeMsg(".a"), 1) == []
+
+
+def test_rand():
+    assert len(rand(16)) == 16
+    assert rand(8) != rand(8)
+
+
+def test_platform():
+    assert get_platform() != ""
+
+
+def test_uptime_string():
+    import time
+
+    assert "s" in get_uptime_string(time.time() - 5)
+    assert "1m" in get_uptime_string(time.time() - 65)
+
+
+def test_array_sum():
+    assert array_sum([[1, 2], [3]]) == [1, 2, 3]
 
 
 def test_chunks():
-    assert chunks("abcdefgh", 3) == ["abc", "def", "gh"]
-    assert chunks("", 3) == []
-    assert all(len(c) <= 3 for c in chunks("x" * 10, 3))
+    assert chunks([1, 2, 3, 4], 2) == [[1, 2], [3, 4]]
 
 
-def test_mention():
-    assert mention(42, "Bob") == "[id42|Bob]"
-    assert mention(42) == "[id42|42]"
+def test_version():
+    assert get_version_raw().count(".") == 2
 
 
-def test_peer_chat_conversion():
-    assert peer_from_chat(7) == 2000000007
-    assert chat_from_peer(2000000007) == 7
-    assert chat_from_peer(12345) is None
-    assert is_user_peer(12345)
-    assert not is_user_peer(2000000007)
+def test_placeholders():
+    custom_placeholders.clear()
 
+    class FakeInner:
+        strings = {"name": "Fake"}
 
-def test_fmt_time():
-    assert fmt_time(65) == "1m 5s"
-    assert fmt_time(3600) == "1h 0m 0s"
-    assert fmt_time(86400) == "1d 0h 0m 0s"
+        async def cb(self, _):
+            return "value"
 
-
-def test_rand_id():
-    import veroku.utils as u
-    orig = u.time.time
-    clock = [orig()]
-    u.time.time = lambda: clock.__setitem__(0, clock[0] + 1) or clock[0]
-    try:
-        a, b = rand_id(), rand_id()
-    finally:
-        u.time.time = orig
-    assert a != b and 0 < a < 2**31
-
-
-def test_sanitize_html():
-    assert sanitize_html("<b>&") == "&lt;b&gt;&amp;"
+    inner = FakeInner()
+    register_placeholder("test_ph", inner.cb, "test desc")
+    assert "test_ph" in custom_placeholders
+    assert config_placeholders() == ["{test_ph} - test desc"]
+    assert unregister_placeholders("FakeInner") == 1
+    assert custom_placeholders == {}
+    custom_placeholders.clear()

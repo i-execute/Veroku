@@ -60,10 +60,10 @@ def modules(db, client, tmp_path, monkeypatch):
         "veroku.loader.Modules.initialize", lambda self: asyncio.sleep(0)
     )
     m = Modules(db, client, str(tmp_path))
-    m.modules = {}
-    m._commands = {}
-    m._watchers = {}
-    m._strings = {}
+    m.commands = {}
+    m.aliases = {}
+    m.modules = []
+    m.watchers = []
     return m
 
 
@@ -94,7 +94,7 @@ def test_dispatcher_routes_command(modules, db, client):
     mod.allmodules = modules
     mod.client = client
     for name, fn in mod.commands.items():
-        modules._commands[name] = fn
+        modules.commands[name] = fn
 
     dispatcher = CommandDispatcher(modules, client, db)
     msg = FakeMessage(".hello world")
@@ -128,7 +128,7 @@ def test_dispatcher_calls_watchers(modules, db, client):
 
     mod = M()
     mod.allmodules = modules
-    modules._watchers["M.watcher_any"] = mod.watchers["watcher_any"]
+    modules.watchers.append(mod.watchers["watcher_any"])
 
     dispatcher = CommandDispatcher(modules, client, db)
     asyncio.run(dispatcher.handle_message(FakeMessage("anything")))
@@ -136,7 +136,7 @@ def test_dispatcher_calls_watchers(modules, db, client):
 
 
 def test_prefix_from_db(modules, db):
-    db.set("veroku", "prefix", "!")
+    db.set("veroku", "command_prefix", "!")
     assert modules.get_prefix() == "!"
     assert modules.get_prefixes() == ["!"]
 

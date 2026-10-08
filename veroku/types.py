@@ -2,6 +2,7 @@
 
 import typing
 from dataclasses import dataclass, field
+from importlib.abc import SourceLoader
 
 from .pointers import PointerDict, PointerList
 
@@ -48,10 +49,33 @@ class Strings:
         return key in self._strings
 
 
+class StringLoader(SourceLoader):
+    """Load module source from a string/bytes, like Feroku dlmod."""
+
+    def __init__(self, data: str, origin: str):
+        self.data = data.encode("utf-8") if isinstance(data, str) else data
+        self.origin = origin
+
+    def get_code(self, fullname: str) -> typing.Any:
+        return compile(
+            self.data.decode("utf-8"), self.origin, "exec", dont_inherit=True
+        )
+
+    def get_source(self, fullname: str) -> str:
+        return self.data.decode("utf-8")
+
+    def get_filename(self, fullname: str | None = None) -> str:
+        return self.origin
+
+    def get_data(self, path: str | None = None) -> bytes:
+        return self.data
+
+
 class Module:
     """Base class for Veroku modules."""
 
     strings = {"name": "Unknown"}
+    name = "Unknown"
 
     def config_complete(self):
         pass

@@ -76,20 +76,22 @@ class CommandDispatcher:
         command = text.split()[0].lower() if text.split() else ""
         args = text[len(command):].strip() if command else ""
 
-        if command not in self._modules.commands:
+        resolved, func = self._modules.dispatch(command)
+        if not func:
             return
+        command = resolved
 
         if self._ratelimit_exceeded(message):
             return
 
         try:
-            await self._modules.commands[command](message, args)
+            await func(message, args)
         except Exception:
             logger.exception("command %s failed", command)
             traceback.print_exc()
 
     async def _handle_watcher(self, message: VerokuMessage) -> None:
-        for watcher in self._modules.watchers.values():
+        for watcher in self._modules.watchers:
             try:
                 await watcher(message)
             except Exception:
