@@ -240,3 +240,43 @@ class ConfigValue:
     def set_no_raise(self, value: typing.Any) -> bool:
         self.value = value
         return True
+
+
+class ModuleConfig:
+    """Feroku-style module config (list of ConfigValue)."""
+
+    def __init__(self, *values: ConfigValue):
+        self._values = {v.option: v for v in values}
+
+    def __contains__(self, option: str) -> bool:
+        return option in self._values
+
+    def __getitem__(self, option: str) -> typing.Any:
+        return self._values[option].value
+
+    def __setitem__(self, option: str, value: typing.Any) -> None:
+        conf = self._values[option]
+        conf.value = value
+        if conf.on_change:
+            conf.on_change()
+
+    def __iter__(self):
+        return iter(self._values)
+
+    def items(self):
+        return self._values.items()
+
+    def getdef(self, option: str) -> typing.Any:
+        return self._values[option].default
+
+    def set_no_raise(self, option: str, value: typing.Any) -> bool:
+        if option not in self._values:
+            return False
+        self._values[option].value = value
+        return True
+
+    def get_doc(self, option: str) -> str:
+        return self._values[option].doc
+
+    def reset(self, option: str) -> None:
+        self._values[option].value = self._values[option].default
