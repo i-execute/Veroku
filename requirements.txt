@@ -1,3 +1,4 @@
-vkover>=0.1.0
+vkover
+httpx
 playwright
 websockify
