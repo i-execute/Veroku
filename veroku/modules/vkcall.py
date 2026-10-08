@@ -2,11 +2,12 @@ from veroku.types import Module, command
 from veroku.utils import chunks, get_args_raw
 
 
-class VKCallsMod(Module):
+class VKCalls(Module):
     """VK calls manager: create, list, finish — via local cache."""
 
     strings = {
-        "name": "VKCalls",
+        "name": "vkcall",
+        "_cls_doc": "VK calls: create, list, finish",
         "created": (
             "Call created\n"
             "Call ID: {call_id}\n"

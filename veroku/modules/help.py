@@ -8,11 +8,11 @@ from ..utils.args import get_args_raw
 logger = logging.getLogger(__name__)
 
 
-class HelpMod(Module):
+class Help(Module):
     """Show help for modules and commands."""
 
     strings = {
-        "name": "Help",
+        "name": "help",
         "_cls_doc": "Shows help for modules and commands",
         "_cmd_doc_help": "[command] - Show help for modules and commands",
         "no_module": "<b>Module not found</b>",

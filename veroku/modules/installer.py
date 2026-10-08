@@ -9,11 +9,11 @@ from ..utils.args import get_args_raw
 logger = logging.getLogger(__name__)
 
 
-class InstallerMod(Module):
+class Installer(Module):
     """Load, download and unload modules."""
 
     strings = {
-        "name": "Installer",
+        "name": "installer",
         "_cls_doc": "Manage modules",
         "_cmd_doc_lm": "[reply to source] - Load module from replied text",
         "_cmd_doc_dlm": "[url] - Load module from URL",

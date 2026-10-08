@@ -11,11 +11,11 @@ from ..utils.veroku import get_version_raw
 START_TS = time.time()
 
 
-class SettingsMod(Module):
+class Settings(Module):
     """Settings and info."""
 
     strings = {
-        "name": "Settings",
+        "name": "settings",
         "_cls_doc": "Settings and userbot info",
         "_cmd_doc_prefix": "<prefix> - Set command prefix",
         "_cmd_doc_verinfo": " - Show version info",

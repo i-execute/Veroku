@@ -4,11 +4,11 @@ from .._internal import restart
 from ..types import Module, command
 
 
-class RestartMod(Module):
+class Restart(Module):
     """Restart userbot."""
 
     strings = {
-        "name": "Restart",
+        "name": "rst",
         "_cls_doc": "Restart Veroku",
         "_cmd_doc_rst": " - Restart Veroku",
         "restarting": "Restarting Veroku...",
