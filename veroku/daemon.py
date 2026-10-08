@@ -4,6 +4,7 @@ import contextlib
 import logging
 import os
 import pwd
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -31,7 +32,13 @@ def _daemon_command(command: list[str], env=None, timeout: int = 30) -> bool:
 
 def install_daemon() -> bool:
     """Install veroku.service as a systemd user unit (rootless) and start it."""
-    executable = str(Path(sys.executable).resolve())
+    executable = shutil.which("veroku") or str(
+        Path(sys.executable).resolve()
+    )
+    if os.path.basename(executable) == "veroku":
+        run_cmd = [executable, "--root", str(Path.home() / ".veroku")]
+    else:
+        run_cmd = [executable, "-m", "veroku"]
     repository = str(Path(__file__).parent.parent.resolve())
     is_root = hasattr(os, "geteuid") and os.geteuid() == 0
     user_unit = not is_root
@@ -50,7 +57,7 @@ def install_daemon() -> bool:
         "[Service]\n"
         "Type=simple\n"
         f"WorkingDirectory={repository}\n"
-        f"ExecStart={executable} -m veroku\n"
+        f"ExecStart={' '.join(run_cmd)}\n"
         "Restart=always\n"
         "RestartSec=5\n"
         "Environment=PYTHONUNBUFFERED=1\n\n"

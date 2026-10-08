@@ -56,7 +56,21 @@ class CustomVKClient:
         self.vk_id: int = 0
 
     async def authorize(self) -> dict:
-        me = self.vk.me
+        import asyncio
+
+        loop = asyncio.get_running_loop()
+        try:
+            me = await loop.run_in_executor(None, lambda: self.vk.me)
+        except Exception:
+            refresher = self.vk.refresher
+            if not refresher:
+                raise
+            tok = await loop.run_in_executor(None, refresher.refresh)
+            if not tok:
+                raise
+            self.vk.client.token = tok
+            self.vk._me = None
+            me = await loop.run_in_executor(None, lambda: self.vk.me)
         self.vk_id = me["id"]
         return me
 
