@@ -29,6 +29,14 @@ veroku --root ~/.veroku
 | `.logs_off` | выключить пересылку логов |
 | `.vkcall` | создать VK-звонок (ссылка + короткие креды) |
 | `.vkcallend <id>` | завершить звонок |
+| `.dash` | запустить серверный дашборд (RAM/disk/load/процессы) с cloudflared-туннелем |
+| `.dashoff` | остановить дашборд |
+
+`.dash` поднимает встроенный stdlib-HTTP-сервер на `127.0.0.1:18900`
+и прокидывает его через cloudflared quick-tunnel. URL печатается в
+терминал (по SSH: строка `VEROKU DASH URL: https://…trycloudflare.com`)
+и отправляется сообщением. Требуется бинарник cloudflared в `~/.veroku_deployer/`
+или в `PATH`. URL эфемерный — после рестарта юзербота вызови `.dash` снова.
 
 ## Свои модули
 
