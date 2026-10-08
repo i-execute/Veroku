@@ -91,7 +91,16 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Veroku userbot")
     ap.add_argument("--root", default=os.path.join(os.path.expanduser("~"), ".veroku"),
                     help="state directory")
+    ap.add_argument("--install", action="store_true",
+                    help="install systemd daemon and exit")
     args = ap.parse_args()
+
+    if args.install:
+        from .daemon import install_daemon
+
+        ok = install_daemon()
+        print("daemon installed and started" if ok else "daemon install failed")
+        return
 
     config_path = os.path.join(args.root, "config.json")
     if not os.path.isfile(config_path):
@@ -102,6 +111,12 @@ def main() -> None:
         db = Database(os.path.join(args.root, "veroku.db"))
         db.set("veroku", "owner", cfg["owner"])
         db.set("veroku", "command_prefix", cfg["prefix"])
+
+        from .daemon import install_daemon
+
+        if install_daemon():
+            print("Daemon installed. You can disconnect from SSH now.")
+            return
 
     bot = Veroku(args.root)
     asyncio.run(bot.run())

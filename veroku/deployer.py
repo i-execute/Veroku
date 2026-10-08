@@ -1,29 +1,66 @@
-"""Veroku deployer: one-shot cloudflared tunnel + noVNC login for first auth."""
+"""Veroku one-shot deployer: VNC login + dash tunnel, used only when auth is needed."""
 
+import contextlib
 import json
 import os
 import secrets
 import shutil
-import signal
-import socket
 import subprocess
 import sys
-import tempfile
 import time
 
-DEFAULT_DEPLOY_DIR = os.path.join(os.path.expanduser("~"), ".veroku_deployer")
+DEFAULT_DEPLOY_DIR = os.path.expanduser("~/.veroku_deployer")
+
+DASH_PORT = 18900
+
+
+def _dash_ephemeral(cloudflared: str) -> None:
+    """One-shot dashboard tunnel right after login: print URL, then kill."""
+    import http.server
+    import socketserver
+    import threading
+
+    from .dash_page import DASH_PAGE, make_handler
+
+    socketserver.ThreadingTCPServer.allow_reuse_address = True
+    server = socketserver.ThreadingTCPServer(
+        ("127.0.0.1", DASH_PORT), make_handler()
+    )
+    server.daemon_threads = True
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+
+    tun = None
+    try:
+        tun, url = _tunnel(cloudflared, DASH_PORT)
+        _log("DASH URL: " + url)
+        _log("Dashboard will shut down in 5 seconds; it reappears only")
+        _log("on the next fresh login (dead session).")
+        time.sleep(5)
+    except Exception:
+        pass
+    finally:
+        if tun:
+            tun.terminate()
+            with contextlib.suppress(Exception):
+                tun.wait(timeout=5)
+        threading.Thread(target=server.shutdown, daemon=True).start()
 
 
 def _find_free_port(start: int) -> int:
-    for p in range(start, start + 50):
+    import socket
+
+    for port in range(start, start + 50):
         with socket.socket() as s:
-            if s.connect_ex(("127.0.0.1", p)) != 0:
-                return p
+            try:
+                s.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
     raise RuntimeError("no free port")
 
 
 def _log(msg: str) -> None:
-    print(f"[veroku-deploy] {msg}", flush=True)
+    print(f"[veroku] {msg}", file=sys.stderr, flush=True)
 
 
 def _ensure_cloudflared(deploy_dir: str) -> str:
@@ -32,63 +69,91 @@ def _ensure_cloudflared(deploy_dir: str) -> str:
     local = os.path.join(deploy_dir, "cloudflared")
     found = shutil.which("cloudflared")
     if found:
-        if not os.path.exists(local):
-            shutil.copy2(found, local)
+        return found
+    if os.path.isfile(local) and os.access(local, os.X_OK):
         return local
-    if os.path.exists(local):
-        return local
-    url = ("https://github.com/cloudflare/cloudflared/releases/latest/download/"
-           "cloudflared-linux-amd64")
-    subprocess.run(["curl", "-fsSL", "-o", local, url], check=True)
+    arch = "amd64" if sys.maxsize > 2**32 and "aarch" not in os.uname().machine else "arm64"
+    url = (
+        f"https://github.com/cloudflare/cloudflared/releases/latest/download/"
+        f"cloudflared-linux-{arch}"
+    )
+    _log("downloading cloudflared")
+    subprocess.run(
+        ["curl", "-fsSL", "-o", local, url],
+        check=True,
+        timeout=300,
+    )
     os.chmod(local, 0o755)
     return local
 
 
 def _ensure_novnc(deploy_dir: str) -> str | None:
-    """Locate a noVNC web root, else return None."""
-    for path in ("/usr/share/novnc", "/opt/novnc",
-                 os.path.join(os.path.expanduser("~"), "vnclocal/novnc-root/usr/share/novnc")):
-        if os.path.isfile(os.path.join(path, "vnc.html")):
-            return path
+    root = os.path.join(deploy_dir, "novnc-root")
+    share = os.path.join(root, "usr", "share", "novnc")
+    if os.path.isdir(share):
+        return share
+    vnclocal = os.path.expanduser("~/vnclocal/novnc-root/usr/share/novnc")
+    if os.path.isdir(vnclocal):
+        return vnclocal
     return None
 
 
 def _xvfb(display: int, w: int = 1280, h: int = 800) -> subprocess.Popen:
     return subprocess.Popen(
-        ["Xvfb", f":{display}", "-screen", 0, f"{w}x{h}x24"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        ["Xvfb", f":{display}", "-screen", "0", f"{w}x{h}x24"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
 
 
 def _x11vnc(display: int, rfbport: int, password: str) -> subprocess.Popen:
-    vn = shutil.which("x11vnc")
-    if not vn:
-        vn = os.path.join(os.path.expanduser("~"),
-                          "vnclocal/x11vnc-root/usr/bin/x11vnc")
     env = dict(os.environ)
-    libdir = os.path.join(os.path.expanduser("~"),
-                          "vnclocal/x11vnc-root/usr/lib/x86_64-linux-gnu")
-    if os.path.isdir(libdir):
-        env["LD_LIBRARY_PATH"] = libdir
+    ld = os.path.expanduser(
+        "~/vnclocal/x11vnc-root/usr/lib/x86_64-linux-gnu"
+    )
+    if os.path.isdir(ld):
+        env["LD_LIBRARY_PATH"] = ld
+    binary = shutil.which("x11vnc")
+    local = os.path.expanduser("~/vnclocal/x11vnc-root/usr/bin/x11vnc")
+    if not binary and os.path.isfile(local):
+        binary = local
     return subprocess.Popen(
-        [vn, "-display", f":{display}", "-rfbport", str(rfbport),
-         "-passwd", password, "-forever", "-shared", "-noxdamage"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,
+        [
+            binary,
+            "-display",
+            f":{display}",
+            "-rfbport",
+            str(rfbport),
+            "-passwd",
+            password,
+            "-shared",
+            "-forever",
+            "-quiet",
+        ],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
 
 
 def _websockify(wsport: int, rfbport: int, web_root: str | None) -> subprocess.Popen:
-    cmd = [sys.executable, "-m", "websockify", "--web", web_root or "",
-           str(wsport), f"localhost:{rfbport}"]
-    if not web_root:
-        cmd = [sys.executable, "-m", "websockify", str(wsport), f"localhost:{rfbport}"]
-    return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    cmd = [sys.executable, "-m", "websockify"]
+    if web_root:
+        cmd.append(f"--web={web_root}")
+    cmd += [str(wsport), f"localhost:{rfbport}"]
+    return subprocess.Popen(
+        cmd,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 def _tunnel(cloudflared: str, port: int) -> tuple[subprocess.Popen, str]:
     proc = subprocess.Popen(
         [cloudflared, "tunnel", "--url", f"http://localhost:{port}"],
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
     )
     url = None
     deadline = time.time() + 60
@@ -113,11 +178,7 @@ def _run_login_browser(display: int, profile_dir: str) -> subprocess.Popen:
     mc = os.path.join(os.path.expanduser("~"), ".cache/ms-playwright")
     if os.path.isdir(mc):
         for d in sorted(os.listdir(mc), reverse=True):
-            cand = os.path.join(mc, d, "chrome-linux", "chrome")
-            if os.path.isfile(cand):
-                chromium = cand
-                break
-            cand = os.path.join(mc, d, "chrome-linux64", "chrome")
+            cand = os.path.join(d, "chrome-linux", "chrome")
             if os.path.isfile(cand):
                 chromium = cand
                 break
@@ -131,33 +192,41 @@ def _run_login_browser(display: int, profile_dir: str) -> subprocess.Popen:
     return subprocess.Popen(
         [chromium, "--no-sandbox", "--disable-dev-shm-usage",
          "--user-data-dir=" + profile_dir, "https://vk.ru/"],
-        env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
 
 
 def _wait_token(profile_dir: str, timeout: int = 600) -> dict:
     """Poll profile localStorage via headless playwright until web token appears."""
     from playwright.sync_api import sync_playwright
+
     with sync_playwright() as pw:
         ctx = pw.chromium.launch_persistent_context(
-            profile_dir, headless=True,
+            profile_dir,
+            headless=True,
             args=["--no-sandbox", "--disable-dev-shm-usage"],
         )
         try:
-            page = ctx.pages[0] if ctx.pages else ctx.new_page()
-            page.goto("https://vk.ru/", wait_until="domcontentloaded", timeout=60000)
-            deadline = time.time() + 30
+            deadline = time.time() + timeout
+            token = None
             while time.time() < deadline:
-                keys = page.evaluate("() => Object.keys(localStorage)")
-                for k in keys:
-                    if "web_token" in k:
-                        v = page.evaluate(f'() => localStorage.getItem("{k}")')
-                        try:
-                            return json.loads(v)
-                        except (ValueError, TypeError):
-                            pass
-                time.sleep(2)
-            raise RuntimeError("web token not found in localStorage")
+                for page in ctx.pages:
+                    try:
+                        token = page.evaluate(
+                            "() => localStorage.getItem('access_token')"
+                        )
+                    except Exception:
+                        continue
+                    if token:
+                        break
+                if token:
+                    break
+                time.sleep(3)
+            if not token:
+                raise RuntimeError("login timed out; no token found")
+            return {"access_token": token}
         finally:
             ctx.close()
 
@@ -203,6 +272,7 @@ def deploy_login(
         try:
             token_data = _wait_token(profile_dir, timeout=600)
         finally:
+            _dash_ephemeral(cloudflared)
             _log("shutting down")
             for p in (browser, tun, ws, vnc, xvfb):
                 try:
