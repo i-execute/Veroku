@@ -164,9 +164,9 @@ DASH_PAGE = r"""<!doctype html>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
-    <meta name="description" content="VENERA-9 — orbital cosmetic station terminal. Dermal restoration & aesthetic research, Deck 4." />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%23ff6a00' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23ff6a00'/%3E%3C/svg%3E" />
-    <title>VENERA-9 // ORBITAL COSMETIC STATION</title>
+    <meta name="description" content="Veroku userbot — ground station terminal." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%23e41c2d' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23ff5361'/%3E%3C/svg%3E" />
+    <title>VEROKU-1 // USERBOT GROUND STATION</title>
     <script type="module" crossorigin>(function(){const t=document.createElement("link").relList;if(t&&t.supports&&t.supports("modulepreload"))return;for(const l of document.querySelectorAll('link[rel="modulepreload"]'))r(l);new MutationObserver(l=>{for(const o of l)if(o.type==="childList")for(const i of o.addedNodes)i.tagName==="LINK"&&i.rel==="modulepreload"&&r(i)}).observe(document,{childList:!0,subtree:!0});function n(l){const o={};return l.integrity&&(o.integrity=l.integrity),l.referrerPolicy&&(o.referrerPolicy=l.referrerPolicy),l.crossOrigin==="use-credentials"?o.credentials="include":l.crossOrigin==="anonymous"?o.credentials="omit":o.credentials="same-origin",o}function r(l){if(l.ep)return;l.ep=!0;const o=n(l);fetch(l.href,o)}})();function Sc(e){return e&&e.__esModule&&Object.prototype.hasOwnProperty.call(e,"default")?e.default:e}var us={exports:{}},dl={},ss={exports:{}},O={};/**
  * @license React
  * react.production.min.js
